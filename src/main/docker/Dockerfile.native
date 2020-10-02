@@ -1,0 +1,53 @@
+####
+# This Dockerfile is used in order to build a container that runs the Quarkus application in native (no JVM) mode
+#
+# Before building the container image run:
+#
+# mvn package -Pnative -Dquarkus.native.container-build=true
+#
+# Then, build the image with:
+#
+# docker build -f src/main/docker/Dockerfile.native -t suhasghorp/demo .
+#
+# Then run the container using:
+#
+# docker run -i --rm -p 8080:8080 suhasghorp/demo -Deval_date=09-25-2020
+#
+###
+#FROM registry.access.redhat.com/ubi8/ubi-minimal:8.1
+#FROM suhasghorp/quantlib:latest
+
+# to run in terminal with tests and jvm mode
+#  ./mvnw clean package -Deval_date=09-25-2020
+# to build native image
+#./mvnw clean package -DskipTests -Pnative
+#to run native image
+#./target/QuantLibServices-1.0-SNAPSHOT-runner -Djava.library.path=/usr/local/lib -Deval_date=09-25-2020
+
+#docker tag suhasghorp/qlswapservice:latest suhasghorp/qlswapservice:latest
+#docker login docker.io
+#docker push suhasghorp/qlswapservice:latest
+
+
+FROM ubuntu:latest
+WORKDIR /work/
+RUN chown 1001 /work \
+    && chmod "g+rwX" /work \
+    && chown 1001:root /work
+COPY --chown=1001:root target/*-runner /work/application
+COPY --chown=1001:root target/resources/* /work/
+RUN ln -s libQuantLib.so.0.0.0 libQuantLib.so.0
+RUN ln -s libQuantLib.so.0.0.0 libQuantLib.so
+#COPY --chown=1001:root target/resources/libQuantLib.la /usr/lib/
+#COPY --chown=1001:root target/resources/libQuantLib.so.0.0.0 /usr/lib/
+#RUN cd /usr/lib && ln -s libQuantLib.so.0.0.0 libQuantLib.so.0
+#RUN cd /usr/lib && ln -s libQuantLib.so.0.0.0 libQuantLib.so
+ENV LD_LIBRARY_PATH .:$LD_LIBRARY_PATH
+RUN ldconfig
+
+
+EXPOSE 8080
+USER 1001
+
+#CMD ["./application", "-Dquarkus.http.host=0.0.0.0", "-Deval_date=09-25-2020"]
+ENTRYPOINT ["./application", "-Dquarkus.http.host=0.0.0.0"]
