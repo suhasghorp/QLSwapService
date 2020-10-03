@@ -29,6 +29,7 @@ public class VanillaSwapAdapter implements JsonbAdapter<VanillaSwap, JsonObject>
             vanillaSwap.bucketedDV01.forEach((K,V) -> bucketsBuilder.add(K,roundAvoid(V,6)));
             builder.add("Bucketed DV01", bucketsBuilder.build());
         }
+
         return builder.build();
     }
 

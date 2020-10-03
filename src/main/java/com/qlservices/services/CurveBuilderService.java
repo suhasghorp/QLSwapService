@@ -5,11 +5,13 @@ import java.util.List;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
-
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import com.qlservices.MarketData;
 import com.qlservices.models.Quote;
 import com.qlservices.util.EURConventions;
 import com.qlservices.util.USDConventions;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.quantlib.*;
 
@@ -19,12 +21,17 @@ public class CurveBuilderService {
     @Inject
     MarketData marketData;
 
+    @ConfigProperty(name = "environment")
+    String env;
+
     private static final Logger LOG = Logger.getLogger(CurveBuilderService.class);
+    private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM-dd-yyyy HH:mm:ss");
 
     public YieldTermStructure buildDiscountCurve(String curveName, String currency) throws Exception {
+        if (env.equals("DEV")) LOG.info("Building discount curve " + LocalDateTime.now().format(formatter));
         org.quantlib.Date qlToday = Settings.instance().getEvaluationDate();
         LocalDate javaToday = marketData.getEvaluationJavaDate();
-        LOG.info("Building discount curve ");
+
         RelinkableYieldTermStructureHandle discountCurve = null;
         RateHelperVector rateHelpers = new RateHelperVector();
         Calendar cal = null;
@@ -46,12 +53,12 @@ public class CurveBuilderService {
         }
         YieldTermStructure curve = new PiecewiseLogLinearDiscount(settlementDate, rateHelpers, overnightIndex.dayCounter());
         curve.enableExtrapolation();
-        LOG.info("Finished building discount curve");
+        if (env.equals("DEV")) LOG.info("Finished building discount curve " + LocalDateTime.now().format(formatter));
         return curve;
     }
 
     public YieldTermStructure buildProjectionCurve(String curveName, String currency, String tenor, YieldTermStructure discountCurve) throws Exception {
-        LOG.info("building projection curve");
+        if (env.equals("DEV")) LOG.info("Building projection curve " + LocalDateTime.now().format(formatter));
         RelinkableYieldTermStructureHandle discountTermStructure = new RelinkableYieldTermStructureHandle();
         YieldTermStructure projectionCurve = null;
         org.quantlib.Date qlToday = Settings.instance().getEvaluationDate();
@@ -66,7 +73,7 @@ public class CurveBuilderService {
 
         //build projection curve
         RateHelperVector rateHelpers = new RateHelperVector();
-        //discountTermStructure.linkTo(buildDiscountCurve(curveName, currency));
+
         discountTermStructure.linkTo(discountCurve);
         List<Quote> quotes = marketData.getProjectionMarketData(marketData.getEvaluationJavaDate(), currency,tenor);
         for (Quote quote : quotes){
@@ -86,7 +93,7 @@ public class CurveBuilderService {
             projectionCurve = new PiecewiseLinearZero(settlementDate, rateHelpers, EURConventions.CURVE_DAY_COUNTER);
             projectionCurve.enableExtrapolation();
         }
-        LOG.info("finsihed building projection curve");
+        if (env.equals("DEV")) LOG.info("Finsihed uilding projection curve " + LocalDateTime.now().format(formatter));
         return projectionCurve;
     }
 

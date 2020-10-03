@@ -4,6 +4,7 @@ import com.qlservices.MarketData;
 import com.qlservices.models.Fixing;
 import com.qlservices.models.VanillaSwap;
 import com.qlservices.services.CurveBuilderService;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.quantlib.*;
 
@@ -11,6 +12,8 @@ import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.Path;
 import javax.ws.rs.core.MediaType;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,6 +22,7 @@ import java.util.Optional;
 @Consumes(MediaType.APPLICATION_JSON)
 public class PriceResource {
     private static final Logger LOG = Logger.getLogger(PriceResource.class);
+    private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM-dd-yyyy HH:mm:ss");
 
     @Inject
     CurveBuilderService curveBuilderService;
@@ -26,10 +30,13 @@ public class PriceResource {
     @Inject
     MarketData marketData;
 
+    @ConfigProperty(name = "environment")
+    String env;
+
     @POST
     @Path("vanillaswap")
     public VanillaSwap price(VanillaSwap swap) throws Exception {
-
+        if (env.equals("DEV")) LOG.info("Starting to price vanillaswap" + LocalDateTime.now().format(formatter));
         RelinkableYieldTermStructureHandle discountTermStructure = new RelinkableYieldTermStructureHandle();
         RelinkableYieldTermStructureHandle projectionTermStructure = new RelinkableYieldTermStructureHandle();
 
@@ -40,38 +47,43 @@ public class PriceResource {
         YieldTermStructure projectionCurve = curveBuilderService.buildProjectionCurve("PROJ-CURVE", "USD", "3M", discountCurve);
         projectionTermStructure.linkTo(projectionCurve);
 
-        LOG.info("Projection curve built");
-
         USDLibor index = new USDLibor(new Period(Frequency.Quarterly), projectionTermStructure);
         swap.setPricingEngine(engine, index);
-        LOG.info("pricing engine set");
+        if (env.equals("DEV")) LOG.info("Pricing engine set " + LocalDateTime.now().format(formatter));
+
         Schedule floatingLegSchedule = swap.getFloatingSchedule();
         Calendar cal = new WeekendsOnly(); //UnitedStates();
         Date prevDate = cal.advance(floatingLegSchedule.previousDate(Settings.instance().getEvaluationDate()), -2, TimeUnit.Days);
         Optional<Double> fixing = getFixingForDate(prevDate, "USD", "3M");
         if (fixing.isPresent())
             index.addFixing(prevDate, fixing.get());
-        LOG.info("fixcing added");
+        if (env.equals("DEV")) LOG.info("Fixing added " + LocalDateTime.now().format(formatter));
+
         swap.netPresentValue = swap.npv();
-        LOG.info("swap npv:" + swap.netPresentValue);
+        if (env.equals("DEV")) LOG.info("Swap NPV: " + swap.netPresentValue + " at " + LocalDateTime.now().format(formatter));
         swap.fairRate = swap.fairRate();
+        if (env.equals("DEV")) LOG.info("Swap fairrate: " + swap.fairRate + " at " + LocalDateTime.now().format(formatter));
 
         if (swap.fullResults) {
+            if (env.equals("DEV")) LOG.info("Generating full results " + LocalDateTime.now().format(formatter));
+
             double shift = 0.0001;
             discountTermStructure.linkTo(new ZeroSpreadedTermStructure(new YieldTermStructureHandle(discountCurve), new QuoteHandle(new SimpleQuote(shift))));
             projectionTermStructure.linkTo(new ZeroSpreadedTermStructure(new YieldTermStructureHandle(projectionCurve), new QuoteHandle(new SimpleQuote(shift))));
-            //swap.npv();
             double npvUp = swap.npv();
+            if (env.equals("DEV")) LOG.info("Swap UP NPV calculated " + LocalDateTime.now().format(formatter));
 
             discountTermStructure.linkTo(new ZeroSpreadedTermStructure(new YieldTermStructureHandle(discountCurve), new QuoteHandle(new SimpleQuote(-shift))));
             projectionTermStructure.linkTo(new ZeroSpreadedTermStructure(new YieldTermStructureHandle(projectionCurve), new QuoteHandle(new SimpleQuote(-shift))));
-            //swap.npv();
             double npvDown = swap.npv();
+            if (env.equals("DEV")) LOG.info("Swap DOWN NPV calculated " + LocalDateTime.now().format(formatter));
+
             double dv01 = (npvDown - npvUp) / 2.0;
             swap.dv01 = swap.swapType == org.quantlib.VanillaSwap.Type.Payer ? dv01 : -1.0 * dv01;
-            LOG.info("swap DV01: " + swap.dv01);
+            if (env.equals("DEV")) LOG.info("Swap dv01 calculated " + swap.dv01 + " at " + LocalDateTime.now().format(formatter));
 
             projectionTermStructure.linkTo(projectionCurve);
+            if (env.equals("DEV")) LOG.info("Starting KRDs " + LocalDateTime.now().format(formatter));
             List<com.qlservices.models.Quote> quotes = marketData.getProjectionMarketData(marketData.getEvaluationJavaDate(), "USD", "3M");
             double sumBuckets = 0.0;
             for (com.qlservices.models.Quote quote : quotes) {
@@ -84,19 +96,20 @@ public class PriceResource {
                 quote.simpleQuote.setValue(value);
                 swap.bucketedDV01.put(quote.tenor, (Math.abs(bucketedDV01) < 0.001 ? 0.0 : bucketedDV01));
                 sumBuckets += bucketedDV01;
+                if (env.equals("DEV")) LOG.info(quote.tenor + " KRD calculated " + " at " + LocalDateTime.now().format(formatter));
             }
-            LOG.info("Sum of Buckets:" + sumBuckets);
         }
-
         return swap;
     }
 
     public Optional<Double> getFixingForDate(Date dt, String currency, String tenor) throws Exception{
+        if (env.equals("DEV")) LOG.info("Looking for fixing " + LocalDateTime.now().format(formatter));
         Optional<Double> ret = Optional.empty();
         List<Fixing> fixings = marketData.getFixingsMarketData(currency, tenor);
         Optional<Fixing> fixing = fixings.stream().filter(fix -> fix.date.serialNumber() == dt.serialNumber()).findFirst();
         if (fixing.isPresent())
             ret = Optional.of(fixing.get().rate);
+        if (env.equals("DEV")) LOG.info("Found fixing " + LocalDateTime.now().format(formatter));
         return ret;
     }
 }

@@ -7,11 +7,11 @@
 #
 # Then, build the image with:
 #
-# docker build -f src/main/docker/Dockerfile.native -t suhasghorp/demo .
+# docker build -f src/main/docker/Dockerfile.native -t suhasghorp/qlswapservice .
 #
 # Then run the container using:
 #
-# docker run -i --rm -p 8080:8080 suhasghorp/demo -Deval_date=09-25-2020
+# docker run -i --rm -p 8080:8080 suhasghorp/qlswapservice -Deval_date=09-25-2020
 #
 ###
 #FROM registry.access.redhat.com/ubi8/ubi-minimal:8.1
@@ -38,10 +38,6 @@ COPY --chown=1001:root target/*-runner /work/application
 COPY --chown=1001:root target/resources/* /work/
 RUN ln -s libQuantLib.so.0.0.0 libQuantLib.so.0
 RUN ln -s libQuantLib.so.0.0.0 libQuantLib.so
-#COPY --chown=1001:root target/resources/libQuantLib.la /usr/lib/
-#COPY --chown=1001:root target/resources/libQuantLib.so.0.0.0 /usr/lib/
-#RUN cd /usr/lib && ln -s libQuantLib.so.0.0.0 libQuantLib.so.0
-#RUN cd /usr/lib && ln -s libQuantLib.so.0.0.0 libQuantLib.so
 ENV LD_LIBRARY_PATH .:$LD_LIBRARY_PATH
 RUN ldconfig
 
@@ -49,5 +45,4 @@ RUN ldconfig
 EXPOSE 8080
 USER 1001
 
-#CMD ["./application", "-Dquarkus.http.host=0.0.0.0", "-Deval_date=09-25-2020"]
 ENTRYPOINT ["./application", "-Dquarkus.http.host=0.0.0.0"]
