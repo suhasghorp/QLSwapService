@@ -1,0 +1,6 @@
+kubectl apply -f kubernetes.yml
+kubectl apply -f istio-gateway.yml
+http://35.237.162.93/qlservices/index.html
+https://developer.okta.com/blog/2019/04/01/spring-boot-microservices-with-kubernetes
+kubectl scale deployment ql-swap-service --replicas=3
+
